@@ -48,13 +48,15 @@ seed_settings() {
       "slot": 1,
       "port": 26691,
       "user": "foFxkmTk",
-      "pass": "twFjCYGY3r6zbJ"
+      "pass": "twFjCYGY3r6zbJ",
+      "bind": "127.0.0.1"
     },
     {
       "slot": 2,
       "port": 43267,
       "user": "foJrARxN",
-      "pass": "fjXF3xNGDaYndv"
+      "pass": "fjXF3xNGDaYndv",
+      "bind": "127.0.0.1"
     }
   ]
 }

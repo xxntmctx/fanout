@@ -194,10 +194,10 @@ func TestDefaultInitialExits(t *testing.T) {
 	if len(exits) != 2 {
 		t.Fatalf("预期 2 个默认出口，实际 %d", len(exits))
 	}
-	if exits[0].Port != 26691 || exits[0].User != "foFxkmTk" || exits[0].Pass != "twFjCYGY3r6zbJ" {
+	if exits[0].Port != 26691 || exits[0].User != "foFxkmTk" || exits[0].Pass != "twFjCYGY3r6zbJ" || exits[0].Bind != "127.0.0.1" {
 		t.Fatalf("出口 1 预设参数不符: %+v", exits[0])
 	}
-	if exits[1].Port != 43267 || exits[1].User != "foJrARxN" || exits[1].Pass != "fjXF3xNGDaYndv" {
+	if exits[1].Port != 43267 || exits[1].User != "foJrARxN" || exits[1].Pass != "fjXF3xNGDaYndv" || exits[1].Bind != "127.0.0.1" {
 		t.Fatalf("出口 2 预设参数不符: %+v", exits[1])
 	}
 

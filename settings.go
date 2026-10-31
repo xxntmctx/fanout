@@ -17,13 +17,14 @@ type InitialExit struct {
 	Port int    `json:"port"`
 	User string `json:"user"`
 	Pass string `json:"pass"`
+	Bind string `json:"bind,omitempty"` // 监听地址，默认 127.0.0.1 本地回环阻断公网扫描
 }
 
 // defaultInitialExits 返回默认预设的两个出口配置。
 func defaultInitialExits() []InitialExit {
 	return []InitialExit{
-		{Slot: 1, Port: 26691, User: "foFxkmTk", Pass: "twFjCYGY3r6zbJ"},
-		{Slot: 2, Port: 43267, User: "foJrARxN", Pass: "fjXF3xNGDaYndv"},
+		{Slot: 1, Port: 26691, User: "foFxkmTk", Pass: "twFjCYGY3r6zbJ", Bind: "127.0.0.1"},
+		{Slot: 2, Port: 43267, User: "foJrARxN", Pass: "fjXF3xNGDaYndv", Bind: "127.0.0.1"},
 	}
 }
 

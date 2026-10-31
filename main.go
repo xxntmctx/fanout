@@ -915,7 +915,7 @@ func bootstrapInitialExits(mgr *Manager) {
 				slot = i + 1
 			}
 			cred := SocksCred{User: preset.User, Pass: preset.Pass}
-			t, err := mgr.StartPreset(picks[i], slot, preset.Port, cred)
+			t, err := mgr.StartPreset(picks[i], slot, preset.Port, cred, preset.Bind)
 			if err != nil {
 				log.Printf("拉起预设出口失败 (槽位 %d, 端口 %d): %v", slot, preset.Port, err)
 				continue

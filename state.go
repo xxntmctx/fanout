@@ -21,6 +21,7 @@ type persistedTunnel struct {
 	// SOCKS5 凭据要存盘：用户已经把它分发给客户端了，重启后变掉等于全断
 	SocksUser string `json:"socks_user,omitempty"`
 	SocksPass string `json:"socks_pass,omitempty"`
+	BindAddr  string `json:"bind_addr,omitempty"`
 	// PrevHost 非空表示上次换节点只做了一半：隧道已经指向新节点，
 	// 但入站还绑在这个旧节点上。恢复时照着它把入站接回来。
 	PrevHost string `json:"prev_host,omitempty"`
@@ -50,6 +51,7 @@ func (m *Manager) saveState() error {
 			Config:      t.Node.Config,
 			SocksUser:   t.Cred.User,
 			SocksPass:   t.Cred.Pass,
+			BindAddr:    t.BindAddr,
 			PrevHost:    t.prevHostOf(),
 		})
 	}
@@ -125,11 +127,12 @@ func (m *Manager) restoreState() (int, error) {
 			cred = gen
 		}
 		t := &Tunnel{
-			Slot:   p.Slot,
-			Port:   p.Port,
-			Node:   node,
-			Status: "starting",
-			Cred:   cred,
+			Slot:     p.Slot,
+			Port:     p.Port,
+			Node:     node,
+			Status:   "starting",
+			Cred:     cred,
+			BindAddr: p.BindAddr,
 		}
 		t.setPrevHost(p.PrevHost)
 		m.mu.Lock()

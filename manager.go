@@ -108,9 +108,9 @@ func (m *Manager) Start(node Node) (*Tunnel, error) {
 	return t, nil
 }
 
-// StartPreset 为指定节点开一条隧道，并显式指定槽位、本地端口与 SOCKS5 凭据。
+// StartPreset 为指定节点开一条隧道，并显式指定槽位、本地端口、SOCKS5 凭据与监听地址。
 // 专用于首次安装启动引导预设出口。
-func (m *Manager) StartPreset(node Node, slot int, port int, cred SocksCred) (*Tunnel, error) {
+func (m *Manager) StartPreset(node Node, slot int, port int, cred SocksCred, bindAddr string) (*Tunnel, error) {
 	if slot <= 0 {
 		var err error
 		slot, err = m.freeSlot()
@@ -123,6 +123,9 @@ func (m *Manager) StartPreset(node Node, slot int, port int, cred SocksCred) (*T
 	}
 	if err := validateCred(cred); err != nil {
 		return nil, fmt.Errorf("无效凭据: %w", err)
+	}
+	if bindAddr == "" {
+		bindAddr = "127.0.0.1"
 	}
 
 	m.mu.Lock()
@@ -138,12 +141,13 @@ func (m *Manager) StartPreset(node Node, slot int, port int, cred SocksCred) (*T
 	}
 
 	t := &Tunnel{
-		Slot:   slot,
-		Port:   port,
-		Node:   node,
-		Status: "starting",
-		Since:  time.Now(),
-		Cred:   cred,
+		Slot:     slot,
+		Port:     port,
+		Node:     node,
+		Status:   "starting",
+		Since:    time.Now(),
+		Cred:     cred,
+		BindAddr: bindAddr,
 	}
 	m.tunnels[slot] = t
 	m.mu.Unlock()
