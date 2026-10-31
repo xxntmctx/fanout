@@ -152,7 +152,8 @@ func (m *Manager) StartPreset(node Node, slot int, port int, cred SocksCred, bin
 	m.tunnels[slot] = t
 	m.mu.Unlock()
 
-	go m.bringUp(t, true)
+	// 预设出口作为守护进程基础服务，启用持久重连（persist=true）
+	go m.bringUpPersist(t, true, true)
 	return t, nil
 }
 

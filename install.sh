@@ -284,9 +284,9 @@ svc_is_active && echo "      服务运行中（${INIT_SYS}）" || {
   exit 1
 }
 
-# 口令与访问路径由 fanout 首次启动时生成，等它写出来
+# 口令、访问路径与预设出口由 fanout 首次启动时生成，等它写出来
 for _ in $(seq 1 10); do
-  [[ -s "${WORK_DIR}/password" && -s "${WORK_DIR}/basepath" ]] && break
+  [[ -s "${WORK_DIR}/password" && -s "${WORK_DIR}/basepath" && -s "${WORK_DIR}/socks5.txt" ]] && break
   sleep 1
 done
 
@@ -301,8 +301,12 @@ echo "  管理界面  http://${IP}:${WEB_PORT}/${BP}/"
 echo "  访问口令  $(cat "${WORK_DIR}/password" 2>/dev/null || echo "见 ${WORK_DIR}/password")"
 echo
 echo "  默认 SOCKS5 出口："
-echo "    socks5://foFxkmTk:twFjCYGY3r6zbJ@127.0.0.1:26691"
-echo "    socks5://foJrARxN:fjXF3xNGDaYndv@127.0.0.1:43267"
+if [[ -s "${WORK_DIR}/socks5.txt" ]]; then
+  sed 's/^/    /' "${WORK_DIR}/socks5.txt"
+else
+  echo "    socks5://foFxkmTk:twFjCYGY3r6zbJ@127.0.0.1:26691"
+  echo "    socks5://foJrARxN:fjXF3xNGDaYndv@127.0.0.1:43267"
+fi
 echo "  所有实时出口  cat ${WORK_DIR}/socks5.txt"
 echo
 echo "  路径和口令都是随机生成的，也可以随时查看："

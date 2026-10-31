@@ -73,6 +73,18 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// 用户显式给了 -web 就以命令行为准，否则沿用界面上存过的端口
+	portExplicit := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "web" {
+			portExplicit = true
+		}
+	})
+	webCfg, err := loadWebSettings(*workDir, *webPort, portExplicit)
+	if err != nil {
+		log.Fatalf("加载 Web 设置失败: %v", err)
+	}
+
 	configurePanel(*workDir, *panelMode)
 	if p, err := openPanel(); err != nil {
 		log.Printf("节点链接后端暂不可用（可在 Web 界面查看原因）: %v", err)
@@ -95,10 +107,8 @@ func main() {
 		// 3x-ui 模式重启不会自动重写面板出站，旧版本升上来时面板里的 socks
 		// 出站没有认证字段，端口一旦要认证就连不上，这里恢复后对账一次
 		go mgr.ReconcileOutbounds()
-	} else if !stateFileExists(*workDir) {
-		// 全新安装首次启动：无 state.json 且未恢复出任何隧道，引导创建预设出口
-		bootstrapInitialExits(mgr)
 	}
+	bootstrapInitialExits(mgr)
 
 	go mgr.WatchHealth()
 
@@ -161,17 +171,6 @@ func main() {
 		log.Printf("已生成访问路径，见 %s", filepath.Join(*workDir, "basepath"))
 	}
 
-	// 用户显式给了 -web 就以命令行为准，否则沿用界面上存过的端口
-	portExplicit := false
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "web" {
-			portExplicit = true
-		}
-	})
-	webCfg, err := loadWebSettings(*workDir, *webPort, portExplicit)
-	if err != nil {
-		log.Fatalf("加载 Web 设置失败: %v", err)
-	}
 
 	srv := newWebServer(StripBasePath(auth.Wrap(mux)))
 	// 设置面板：改密码 / 改路径 / 改端口 / 改本地监听。
@@ -881,39 +880,94 @@ func stateFileExists(dir string) bool {
 	return err == nil
 }
 
-// bootstrapInitialExits 全新首次安装引导开通预设的 SOCKS5 出口。
+// bootstrapInitialExits 全新首次安装或缺失默认出口时引导开通预设的 SOCKS5 出口。
 func bootstrapInitialExits(mgr *Manager) {
 	exits := getWebSettings().InitialExits
 	if len(exits) == 0 {
 		return
 	}
-	log.Printf("首次安装启动：检测到预设出口配置，正在准备开通 %d 条默认出口...", len(exits))
+	markerFile := filepath.Join(mgr.workDir, ".bootstrapped")
+	if _, err := os.Stat(markerFile); err == nil {
+		return
+	}
+
+	mgr.mu.RLock()
+	var pending []InitialExit
+	for _, preset := range exits {
+		portUsed := false
+		for _, t := range mgr.tunnels {
+			if t.Port == preset.Port {
+				portUsed = true
+				break
+			}
+		}
+		if !portUsed {
+			pending = append(pending, preset)
+		}
+	}
+	mgr.mu.RUnlock()
+
+	if len(pending) == 0 {
+		_ = os.WriteFile(markerFile, []byte(time.Now().Format(time.RFC3339)), 0644)
+		return
+	}
+
+	log.Printf("检测到未开通的预设出口配置，正在准备开通 %d 条默认出口...", len(pending))
 	go func() {
-		// 节点列表拉取若慢于服务启动，最多等待 30 秒
+		// 节点列表拉取若慢于服务启动，重试刷新最多等待 30 秒
 		for i := 0; i < 15; i++ {
 			mgr.mu.RLock()
 			count := len(mgr.nodes)
 			mgr.mu.RUnlock()
-			if count >= len(exits) {
+			if count >= len(pending) {
 				break
 			}
+			_, _ = mgr.RefreshNodes()
 			time.Sleep(2 * time.Second)
 		}
 
-		picks, err := mgr.pickNodes("", len(exits), nil)
-		if err != nil {
-			log.Printf("挑选预设出口节点失败: %v（可在 Web 界面手动开通）", err)
+		picks, err := mgr.pickNodes("", len(pending), nil)
+		if err != nil || len(picks) < len(pending) {
+			// 兜底回退：若家宽过滤导致节点不足，从全量可用节点中补齐
+			mgr.mu.RLock()
+			used := map[string]bool{}
+			for _, p := range picks {
+				used[p.HostName] = true
+			}
+			for _, t := range mgr.tunnels {
+				used[t.Node.HostName] = true
+			}
+			for _, n := range mgr.nodes {
+				if len(picks) >= len(pending) {
+					break
+				}
+				if !used[n.HostName] {
+					used[n.HostName] = true
+					picks = append(picks, n)
+				}
+			}
+			mgr.mu.RUnlock()
+		}
+
+		if len(picks) == 0 {
+			log.Printf("未获取到可用节点，稍后可在 Web 界面手动刷新开通")
 			return
 		}
 
-		for i, preset := range exits {
+		for i, preset := range pending {
 			if i >= len(picks) {
 				break
 			}
 			slot := preset.Slot
-			if slot <= 0 {
-				slot = i + 1
+			mgr.mu.RLock()
+			for {
+				if _, used := mgr.tunnels[slot]; !used && slot > 0 {
+					break
+				}
+				slot++
 			}
+			mgr.mu.RUnlock()
+
 			cred := SocksCred{User: preset.User, Pass: preset.Pass}
 			t, err := mgr.StartPreset(picks[i], slot, preset.Port, cred, preset.Bind)
 			if err != nil {
@@ -923,5 +977,7 @@ func bootstrapInitialExits(mgr *Manager) {
 			log.Printf("已拉起预设出口 %d: SOCKS5 端口 %d, 用户 %s, 初始节点 %s (%s)",
 				t.Slot, t.Port, t.Cred.User, t.Node.HostName, t.Node.Country)
 		}
+		_ = mgr.saveState()
+		_ = os.WriteFile(markerFile, []byte(time.Now().Format(time.RFC3339)), 0644)
 	}()
 }
