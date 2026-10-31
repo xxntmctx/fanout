@@ -11,6 +11,22 @@ import (
 	"sync"
 )
 
+// InitialExit 是首次安装时可选的预设出口配置（固定端口与凭据）。
+type InitialExit struct {
+	Slot int    `json:"slot,omitempty"`
+	Port int    `json:"port"`
+	User string `json:"user"`
+	Pass string `json:"pass"`
+}
+
+// defaultInitialExits 返回默认预设的两个出口配置。
+func defaultInitialExits() []InitialExit {
+	return []InitialExit{
+		{Slot: 1, Port: 26691, User: "foFxkmTk", Pass: "twFjCYGY3r6zbJ"},
+		{Slot: 2, Port: 43267, User: "foJrARxN", Pass: "fjXF3xNGDaYndv"},
+	}
+}
+
 // WebSettings 是落盘的可改配置：管理界面的监听端口与地址，外加几个功能开关。
 // 界面改完即时生效。访问口令与访问路径各有专门的文件（password / basepath），
 // 不放这里，但都能在设置面板里改。
@@ -26,6 +42,8 @@ type WebSettings struct {
 	// SubToken 是订阅地址里的口令。订阅要免登录才能被客户端拉取，
 	// 所以这串就是它唯一的门槛，等同于密码，不要外传。
 	SubToken string `json:"sub_token,omitempty"`
+	// InitialExits 首次无状态安装时引导创建的预设出口列表。
+	InitialExits []InitialExit `json:"initial_exits,omitempty"`
 }
 
 // residentialOnly 返回"只用家宽"是否开启。没配过时默认开：
@@ -64,7 +82,7 @@ func webSettingsFilePath(dir string) string { return filepath.Join(dir, "setting
 func loadWebSettings(dir string, defaultPort int, portExplicit bool) (WebSettings, error) {
 	webSettingsPath = webSettingsFilePath(dir)
 
-	s := WebSettings{Port: defaultPort, ListenAddr: ""}
+	s := WebSettings{Port: defaultPort, ListenAddr: "", InitialExits: defaultInitialExits()}
 	blob, err := os.ReadFile(webSettingsPath)
 	switch {
 	case os.IsNotExist(err):
@@ -80,6 +98,9 @@ func loadWebSettings(dir string, defaultPort int, portExplicit bool) (WebSetting
 	}
 	if s.Port == 0 {
 		s.Port = defaultPort
+	}
+	if s.InitialExits == nil {
+		s.InitialExits = defaultInitialExits()
 	}
 	changed := false
 	if portExplicit && s.Port != defaultPort {

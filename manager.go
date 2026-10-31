@@ -108,6 +108,50 @@ func (m *Manager) Start(node Node) (*Tunnel, error) {
 	return t, nil
 }
 
+// StartPreset 为指定节点开一条隧道，并显式指定槽位、本地端口与 SOCKS5 凭据。
+// 专用于首次安装启动引导预设出口。
+func (m *Manager) StartPreset(node Node, slot int, port int, cred SocksCred) (*Tunnel, error) {
+	if slot <= 0 {
+		var err error
+		slot, err = m.freeSlot()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if port <= 0 || port > 65535 {
+		return nil, fmt.Errorf("无效端口: %d", port)
+	}
+	if err := validateCred(cred); err != nil {
+		return nil, fmt.Errorf("无效凭据: %w", err)
+	}
+
+	m.mu.Lock()
+	if _, used := m.tunnels[slot]; used {
+		m.mu.Unlock()
+		return nil, fmt.Errorf("槽位 %d 已被占用", slot)
+	}
+	for _, other := range m.tunnels {
+		if other.Port == port {
+			m.mu.Unlock()
+			return nil, fmt.Errorf("端口 %d 已被出口 %d 占用", port, other.Slot)
+		}
+	}
+
+	t := &Tunnel{
+		Slot:   slot,
+		Port:   port,
+		Node:   node,
+		Status: "starting",
+		Since:  time.Now(),
+		Cred:   cred,
+	}
+	m.tunnels[slot] = t
+	m.mu.Unlock()
+
+	go m.bringUp(t, true)
+	return t, nil
+}
+
 // bringUp 把一条隧道拉起来。
 //
 // notify 决定成功后是否立刻重建后端配置。换节点重连时要传 false：

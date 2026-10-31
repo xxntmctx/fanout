@@ -133,3 +133,28 @@ func containsStr(s, sub string) bool {
 	}
 	return false
 }
+
+func TestExportSocks5List(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(20, dir)
+	tn1 := &Tunnel{Slot: 1, Port: 26691, Cred: SocksCred{User: "u1", Pass: "p1"}, Status: "up"}
+	tn2 := &Tunnel{Slot: 2, Port: 43267, Cred: SocksCred{User: "u2", Pass: "p2"}, Status: "starting"}
+	m.tunnels[1] = tn1
+	m.tunnels[2] = tn2
+
+	if err := m.saveState(); err != nil {
+		t.Fatal(err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(dir, "socks5.txt"))
+	if err != nil {
+		t.Fatalf("socks5.txt 应当生成: %v", err)
+	}
+	s := string(content)
+	if !containsStr(s, "socks5://u1:p1@127.0.0.1:26691") {
+		t.Fatalf("缺失出口 1 链接，实际内容: %s", s)
+	}
+	if !containsStr(s, "socks5://u2:p2@127.0.0.1:43267") {
+		t.Fatalf("缺失出口 2 链接，实际内容: %s", s)
+	}
+}

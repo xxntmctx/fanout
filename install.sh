@@ -39,7 +39,26 @@ seed_settings() {
     cur=$(sed -n 's/.*"port"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' "$f" | head -1)
     [[ -n $cur ]] && { WEB_PORT="$cur"; return; }
   fi
-  printf '{\n  "port": %s,\n  "listen_addr": ""\n}\n' "$WEB_PORT" > "$f"
+  cat > "$f" <<EOF
+{
+  "port": ${WEB_PORT},
+  "listen_addr": "",
+  "initial_exits": [
+    {
+      "slot": 1,
+      "port": 26691,
+      "user": "foFxkmTk",
+      "pass": "twFjCYGY3r6zbJ"
+    },
+    {
+      "slot": 2,
+      "port": 43267,
+      "user": "foJrARxN",
+      "pass": "fjXF3xNGDaYndv"
+    }
+  ]
+}
+EOF
   chmod 600 "$f"
 }
 
@@ -278,6 +297,11 @@ ACTUAL_PORT=$(sed -n 's/.*"port"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' \
 echo
 echo "  管理界面  http://${IP}:${WEB_PORT}/${BP}/"
 echo "  访问口令  $(cat "${WORK_DIR}/password" 2>/dev/null || echo "见 ${WORK_DIR}/password")"
+echo
+echo "  默认 SOCKS5 出口："
+echo "    socks5://foFxkmTk:twFjCYGY3r6zbJ@127.0.0.1:26691"
+echo "    socks5://foJrARxN:fjXF3xNGDaYndv@127.0.0.1:43267"
+echo "  所有实时出口  cat ${WORK_DIR}/socks5.txt"
 echo
 echo "  路径和口令都是随机生成的，也可以随时查看："
 echo "    cat ${WORK_DIR}/basepath"

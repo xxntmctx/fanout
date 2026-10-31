@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // version 由构建时通过 -ldflags 注入。
@@ -94,6 +95,9 @@ func main() {
 		// 3x-ui 模式重启不会自动重写面板出站，旧版本升上来时面板里的 socks
 		// 出站没有认证字段，端口一旦要认证就连不上，这里恢复后对账一次
 		go mgr.ReconcileOutbounds()
+	} else if !stateFileExists(*workDir) {
+		// 全新安装首次启动：无 state.json 且未恢复出任何隧道，引导创建预设出口
+		bootstrapInitialExits(mgr)
 	}
 
 	go mgr.WatchHealth()
@@ -869,4 +873,55 @@ func apiInboundCreate(m *Manager) http.HandlerFunc {
 			"security": ib.Security,
 		})
 	}
+}
+
+// stateFileExists 检查持久化状态文件是否存在。
+func stateFileExists(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, "state.json"))
+	return err == nil
+}
+
+// bootstrapInitialExits 全新首次安装引导开通预设的 SOCKS5 出口。
+func bootstrapInitialExits(mgr *Manager) {
+	exits := getWebSettings().InitialExits
+	if len(exits) == 0 {
+		return
+	}
+	log.Printf("首次安装启动：检测到预设出口配置，正在准备开通 %d 条默认出口...", len(exits))
+	go func() {
+		// 节点列表拉取若慢于服务启动，最多等待 30 秒
+		for i := 0; i < 15; i++ {
+			mgr.mu.RLock()
+			count := len(mgr.nodes)
+			mgr.mu.RUnlock()
+			if count >= len(exits) {
+				break
+			}
+			time.Sleep(2 * time.Second)
+		}
+
+		picks, err := mgr.pickNodes("", len(exits), nil)
+		if err != nil {
+			log.Printf("挑选预设出口节点失败: %v（可在 Web 界面手动开通）", err)
+			return
+		}
+
+		for i, preset := range exits {
+			if i >= len(picks) {
+				break
+			}
+			slot := preset.Slot
+			if slot <= 0 {
+				slot = i + 1
+			}
+			cred := SocksCred{User: preset.User, Pass: preset.Pass}
+			t, err := mgr.StartPreset(picks[i], slot, preset.Port, cred)
+			if err != nil {
+				log.Printf("拉起预设出口失败 (槽位 %d, 端口 %d): %v", slot, preset.Port, err)
+				continue
+			}
+			log.Printf("已拉起预设出口 %d: SOCKS5 端口 %d, 用户 %s, 初始节点 %s (%s)",
+				t.Slot, t.Port, t.Cred.User, t.Node.HostName, t.Node.Country)
+		}
+	}()
 }

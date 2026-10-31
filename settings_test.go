@@ -188,3 +188,25 @@ func TestLoadWebSettingsExplicitFlagWins(t *testing.T) {
 		t.Fatalf("显式指定的端口应已写回，实际 %d", s.Port)
 	}
 }
+
+func TestDefaultInitialExits(t *testing.T) {
+	exits := defaultInitialExits()
+	if len(exits) != 2 {
+		t.Fatalf("预期 2 个默认出口，实际 %d", len(exits))
+	}
+	if exits[0].Port != 26691 || exits[0].User != "foFxkmTk" || exits[0].Pass != "twFjCYGY3r6zbJ" {
+		t.Fatalf("出口 1 预设参数不符: %+v", exits[0])
+	}
+	if exits[1].Port != 43267 || exits[1].User != "foJrARxN" || exits[1].Pass != "fjXF3xNGDaYndv" {
+		t.Fatalf("出口 2 预设参数不符: %+v", exits[1])
+	}
+
+	dir := t.TempDir()
+	s, err := loadWebSettings(dir, 8899, false)
+	if err != nil {
+		t.Fatalf("loadWebSettings 报错: %v", err)
+	}
+	if len(s.InitialExits) != 2 {
+		t.Fatalf("loadWebSettings 预期 2 个初始出口，实际 %d", len(s.InitialExits))
+	}
+}

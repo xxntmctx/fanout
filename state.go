@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // persistedTunnel 是隧道在磁盘上的形态。
@@ -61,7 +62,24 @@ func (m *Manager) saveState() error {
 	if err := os.WriteFile(tmp, blob, 0600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, statePath(m.workDir))
+	if err := os.Rename(tmp, statePath(m.workDir)); err != nil {
+		return err
+	}
+	m.exportSocks5List()
+	return nil
+}
+
+// exportSocks5List 导出当前所有可用 SOCKS5 出口链接至 socks5.txt，供脚本或第三方服务动态读取。
+func (m *Manager) exportSocks5List() {
+	var lines []string
+	for _, t := range m.Tunnels() {
+		if t.Status == "stopped" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("socks5://%s:%s@127.0.0.1:%d", t.Cred.User, t.Cred.Pass, t.Port))
+	}
+	content := strings.Join(lines, "\n") + "\n"
+	_ = os.WriteFile(filepath.Join(m.workDir, "socks5.txt"), []byte(content), 0644)
 }
 
 // restoreState 读回上次的隧道并逐条拉起。
